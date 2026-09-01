@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Tenant Vendor Inventory Management</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 & Babel Standalone -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const API_URL = 'http://localhost:5000';
+
+    function App() {
+      const [token, setToken] = useState(localStorage.getItem('vendor_token') || null);
+      const [vendor, setVendor] = useState(JSON.parse(localStorage.getItem('vendor_user') || 'null'));
+
+      const handleLoginSuccess = (newToken, newVendor) => {
+        localStorage.setItem('vendor_token', newToken);
+        localStorage.setItem('vendor_user', JSON.stringify(newVendor));
+        setToken(newToken);
+        setVendor(newVendor);
+      };
+
+      const handleLogout = () => {
+        localStorage.removeItem('vendor_token');
+        localStorage.removeItem('vendor_user');
+        setToken(null);
+        setVendor(null);
+      };
+
+      return (
+        <div>
+          {token ? (
+            <Dashboard token={token} vendor={vendor} onLogout={handleLogout} />
+          ) : (
+            <Auth onLoginSuccess={handleLoginSuccess} />
+          )}
+        </div>
+      );
+    }
+
+    function Auth({ onLoginSuccess }) {
+      const [isLogin, setIsLogin] = useState(true);
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [name, setName] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
+        const payload = isLogin ? { email, password } : { email, password, name };
+
+        try {
+          const res = await fetch(`${API_URL}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (res.ok) {
+            onLoginSuccess(data.token, data.vendor);
+          } else {
+            setError(data.error || 'Authentication failed');
+          }
+        } catch (err) {
+          setError('Cannot connect to backend server at ' + API_URL);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white">
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="inline-flex p-3 bg-indigo-500/20 text-indigo-400 rounded-xl mb-3 border border-indigo-400/30">
+                📦
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight">Vendor Portal</h1>
+              <p className="text-sm text-slate-300 mt-1">Multi-Tenant Isolated Inventory</p>
+            </div>
+
+            {error && (
+              <div className="bg-rose-500/20 border border-rose-500/50 text-rose-200 text-xs p-3 rounded-lg mb-4">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {!isLogin && (
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-300 font-semibold mb-1">Vendor / Business Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Apex Electronics Ltd."
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-slate-300 font-semibold mb-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="vendor@company.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-slate-300 font-semibold mb-1">Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-lg transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 text-sm"
+              >
+                {loading ? 'Please wait...' : (isLogin ? 'Sign In to Dashboard' : 'Register Vendor Account')}
+              </button>
+            </form>
+
+            <div className="mt-6 text-center text-xs text-slate-400">
+              {isLogin ? "Need an isolated tenant space? " : "Already have a registered account? "}
+              <button
+                onClick={() => { setIsLogin(!isLogin); setError(''); }}
+                className="text-indigo-400 hover:text-indigo-300 font-semibold underline ml-1"
+              >
+                {isLogin ? 'Sign Up' : 'Log In'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Dashboard({ token, vendor, onLogout }) {
+      const [items, setItems] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [banner, setBanner] = useState(null);
+
+      // Create item form
+      const [name, setName] = useState('');
+      const [price, setPrice] = useState('');
+      const [minThreshold, setMinThreshold] = useState(5);
+      const [initialQty, setInitialQty] = useState('');
+      const [batchId, setBatchId] = useState('');
+      const [expirationDate, setExpirationDate] = useState('');
+
+      // Modals
+      const [batchModalItem, setBatchModalItem] = useState(null);
+      const [newBatchId, setNewBatchId] = useState('');
+      const [newBatchQty, setNewBatchQty] = useState('');
+      const [newBatchExpiry, setNewBatchExpiry] = useState('');
+
+      const [deductModalItem, setDeductModalItem] = useState(null);
+      const [deductQty, setDeductQty] = useState('');
+      const [deductAudit, setDeductAudit] = useState(null);
+
+      const fetchInventory = async () => {
+        setLoading(true);
+        try {
+          const res = await fetch(`${API_URL}/api/inventory`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setItems(data);
+          } else if (res.status === 401 || res.status === 403) {
+            onLogout();
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Failed to fetch inventory from server.' });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      useEffect(() => {
+        fetchInventory();
+      }, []);
+
+      const handleCreateItem = async (e) => {
+        e.preventDefault();
+        setBanner(null);
+        try {
+          const res = await fetch(`${API_URL}/api/inventory`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name,
+              price: Number(price),
+              minThreshold: Number(minThreshold),
+              quantity: initialQty ? Number(initialQty) : 0,
+              batchId: batchId || undefined,
+              expirationDate: expirationDate || undefined
+            })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setName(''); setPrice(''); setMinThreshold(5); setInitialQty(''); setBatchId(''); setExpirationDate('');
+            setBanner({ type: 'success', text: `Item "${name}" created with initial batch.` });
+            fetchInventory();
+          } else {
+            setBanner({ type: 'error', text: data.error || 'Failed to create item' });
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Server connection error' });
+        }
+      };
+
+      const handleAddBatch = async (e) => {
+        e.preventDefault();
+        if (!batchModalItem) return;
+        setBanner(null);
+        try {
+          const res = await fetch(`${API_URL}/api/inventory/${batchModalItem.id}/batches`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              batchId: newBatchId || undefined,
+              quantity: Number(newBatchQty),
+              expirationDate: newBatchExpiry
+            })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setBanner({ type: 'success', text: `New batch added to "${batchModalItem.name}".` });
+            setBatchModalItem(null);
+            setNewBatchId(''); setNewBatchQty(''); setNewBatchExpiry('');
+            fetchInventory();
+          } else {
+            setBanner({ type: 'error', text: data.error || 'Failed to add batch' });
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Server connection error' });
+        }
+      };
+
+      const handleDeductFIFO = async (e) => {
+        e.preventDefault();
+        if (!deductModalItem) return;
+        setBanner(null);
+        setDeductAudit(null);
+
+        try {
+          const res = await fetch(`${API_URL}/api/inventory/${deductModalItem.id}/deduct`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              quantity: Number(deductQty),
+              reason: 'Customer Order Fulfillment'
+            })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setDeductAudit(data);
+            setBanner({ type: 'success', text: data.message });
+            setDeductQty('');
+            fetchInventory();
+          } else {
+            setBanner({ type: 'error', text: data.error || 'Deduction failed' });
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Server connection error' });
+        }
+      };
+
+      const handleDeleteItem = async (id, itemName) => {
+        if (!window.confirm(`Delete item "${itemName}" and all batches?`)) return;
+        try {
+          const res = await fetch(`${API_URL}/api/inventory/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setBanner({ type: 'success', text: `Item "${itemName}" removed.` });
+            fetchInventory();
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Delete failed' });
+        }
+      };
+
+      return (
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          {/* Top Bar */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-8 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🏬</span>
+                <h1 className="text-2xl font-bold text-slate-900">{vendor?.name || 'Vendor'}</h1>
+                <span className="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-indigo-200">
+                  Tenant ID: {vendor?.id?.slice(0, 8)}...
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Security: <strong className="text-slate-700">Strict Tenant Data Isolation</strong> | Logged in as: <span className="font-mono text-slate-700">{vendor?.email}</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={fetchInventory}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg text-sm font-medium transition"
+              >
+                🔄 Refresh
+              </button>
+              <button
+                onClick={onLogout}
+                className="bg-rose-50 hover:bg-rose-100 text-rose-600 px-4 py-2 rounded-lg text-sm font-semibold transition border border-rose-200"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+
+          {/* Alert Banner */}
+          {banner && (
+            <div className={`p-4 rounded-xl mb-6 flex justify-between items-center text-sm font-medium ${
+              banner.type === 'error' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+            }`}>
+              <span>{banner.text}</span>
+              <button onClick={() => setBanner(null)} className="font-bold text-lg leading-none">×</button>
+            </div>
+          )}
+
+          {/* FIFO Audit Callout */}
+          {deductAudit && (
+            <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-2xl p-6 mb-8 shadow-xl border border-indigo-700/50">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    <span>⚡</span> Perishable Guard: First-In, First-Out (FIFO) Deduction Report
+                  </h3>
+                  <p className="text-xs text-indigo-200 mt-0.5">
+                    Stock deduction strictly allocated to batches with the earliest expiry dates first.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDeductAudit(null)}
+                  className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-md text-white font-semibold transition"
+                >
+                  Dismiss
+                </button>
+              </div>
+
+              <div className="overflow-x-auto bg-slate-800/80 rounded-xl border border-slate-700">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-700/50 text-slate-300 border-b border-slate-700">
+                    <tr>
+                      <th className="p-3">Batch Identifier</th>
+                      <th className="p-3">Batch Expiry</th>
+                      <th className="p-3">Units Deducted</th>
+                      <th className="p-3">Units Remaining in Batch</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700 font-mono">
+                    {deductAudit.deductions.map((d, i) => (
+                      <tr key={i} className="hover:bg-slate-700/30">
+                        <td className="p-3 font-semibold text-indigo-300">{d.batchId}</td>
+                        <td className="p-3 text-slate-300">{new Date(d.expirationDate).toLocaleDateString()}</td>
+                        <td className="p-3 text-rose-400 font-bold">-{d.deducted} units</td>
+                        <td className="p-3 text-emerald-400">{d.remainingInBatch} units</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {deductAudit.leadTimeAlert && (
+                <div className="mt-4 p-3 bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs rounded-xl flex items-center gap-2 font-medium">
+                  <span>⚠️</span> {deductAudit.leadTimeAlert}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Grid Layout: Create Item + Inventory List */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column: Register New Item */}
+            <div className="lg:col-span-1">
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs sticky top-6">
+                <h2 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+                  <span>➕</span> Add Inventory Item
+                </h2>
+                <p className="text-xs text-slate-500 mb-5">Configure product details, threshold, and initial batch.</p>
+
+                <form onSubmit={handleCreateItem} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Item / Product Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Organic Strawberries"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Price ($) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="5.99"
+                        value={price}
+                        onChange={e => setPrice(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                        Lead-Time Min Threshold
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="5"
+                        value={minThreshold}
+                        onChange={e => setMinThreshold(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Perishable Batch Details</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Initial Qty</label>
+                      <input
+                        type="number"
+                        placeholder="50"
+                        value={initialQty}
+                        onChange={e => setInitialQty(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Batch Code</label>
+                      <input
+                        type="text"
+                        placeholder="LOT-A1"
+                        value={batchId}
+                        onChange={e => setBatchId(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Batch Expiration Date</label>
+                    <input
+                      type="date"
+                      value={expirationDate}
+                      onChange={e => setExpirationDate(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 rounded-lg text-sm transition shadow-sm"
+                  >
+                    Save & Initialize Item
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Right Column: Inventory List */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200">
+                <h2 className="font-bold text-slate-800">Tenant Inventory & Guard Status</h2>
+                <span className="text-xs text-slate-500">{items.length} Product(s) Registered</span>
+              </div>
+
+              {loading ? (
+                <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400">
+                  Loading inventory...
+                </div>
+              ) : items.length === 0 ? (
+                <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center">
+                  <span className="text-4xl">📦</span>
+                  <h3 className="font-bold text-slate-700 mt-2">No items in your inventory</h3>
+                  <p className="text-xs text-slate-400 mt-1">Use the form on the left to add your first product with batch expiration dates.</p>
+                </div>
+              ) : (
+                items.map(item => {
+                  const activeBatches = (item.batches || []).filter(b => b.quantity > 0);
+                  return (
+                    <div key={item.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs hover:border-slate-300 transition">
+                      {/* Item Header */}
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-100">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-lg font-bold text-slate-900">{item.name}</h3>
+                            <span className="text-sm font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                              ${item.price.toFixed(2)}
+                            </span>
+
+                            {/* Lead-Time Guard Indicator */}
+                            {item.isLowStock ? (
+                              <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-0.5 rounded-full font-bold border border-amber-300 flex items-center gap-1">
+                                ⚠️ Low Stock Alert (Min: {item.minThreshold})
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200 flex items-center gap-1">
+                                ✓ Stock Healthy (Min: {item.minThreshold})
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-xs text-slate-500 mt-1">
+                            Total Units Available: <strong className="text-slate-800 text-sm font-bold">{item.totalStock}</strong>
+                          </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            onClick={() => { setBatchModalItem(item); }}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs"
+                          >
+                            + Add Batch
+                          </button>
+                          <button
+                            onClick={() => { setDeductModalItem(item); setDeductAudit(null); }}
+                            disabled={item.totalStock <= 0}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs disabled:opacity-40"
+                          >
+                            ⚡ Deduct FIFO
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(item.id, item.name)}
+                            className="text-slate-400 hover:text-rose-600 text-xs p-2 transition"
+                            title="Delete Item"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Batches Container (FIFO Order) */}
+                      <div className="pt-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                            🛡️ Perishable FIFO Batches (sorted by expiration date)
+                          </span>
+                          <span className="text-[11px] text-slate-400">{activeBatches.length} active batch(es)</span>
+                        </div>
+
+                        {activeBatches.length === 0 ? (
+                          <div className="bg-slate-50 border border-slate-200 border-dashed rounded-xl p-4 text-center text-xs text-slate-400">
+                            Out of stock. Click "+ Add Batch" to replenish stock with an expiration date.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                            {activeBatches.map((batch, bIdx) => {
+                              const expiry = new Date(batch.expirationDate);
+                              const isExpired = expiry < new Date();
+                              return (
+                                <div
+                                  key={batch.id}
+                                  className={`p-3 rounded-xl border text-xs relative ${
+                                    bIdx === 0 ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-slate-50/80 border-slate-200'
+                                  }`}
+                                >
+                                  {bIdx === 0 && (
+                                    <span className="absolute -top-2 right-2 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                      Next for FIFO
+                                    </span>
+                                  )}
+                                  <div className="font-mono font-bold text-slate-800">{batch.batchId}</div>
+                                  <div className={`text-[11px] mt-0.5 font-medium ${isExpired ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>
+                                    Expires: {expiry.toLocaleDateString()} {isExpired ? '(EXPIRED)' : ''}
+                                  </div>
+                                  <div className="mt-2 pt-2 border-t border-slate-200/60 flex justify-between items-baseline">
+                                    <span className="text-slate-400 text-[10px]">Remaining:</span>
+                                    <span className="font-bold text-sm text-slate-900 font-mono">
+                                      {batch.quantity} <span className="text-[10px] text-slate-400 font-normal">/ {batch.initialQuantity}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* MODAL: ADD BATCH */}
+          {batchModalItem && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
+                <h3 className="text-lg font-bold text-slate-900">Add Stock Batch</h3>
+                <p className="text-xs text-slate-500 mb-4">Adding perishable stock to: <strong className="text-slate-800">{batchModalItem.name}</strong></p>
+
+                <form onSubmit={handleAddBatch} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Batch Code / ID</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. LOT-2026-AUG"
+                      value={newBatchId}
+                      onChange={e => setNewBatchId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Quantity *</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="e.g. 25"
+                      value={newBatchQty}
+                      onChange={e => setNewBatchQty(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Expiration Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={newBatchExpiry}
+                      onChange={e => setNewBatchExpiry(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setBatchModalItem(null)}
+                      className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition shadow-xs"
+                    >
+                      Confirm Batch
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: FIFO DEDUCT */}
+          {deductModalItem && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <span>⚡</span> First-In, First-Out (FIFO) Deduction
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 mb-3">
+                  Product: <strong className="text-slate-800">{deductModalItem.name}</strong> (Available Stock: <strong className="text-indigo-600">{deductModalItem.totalStock}</strong>)
+                </p>
+
+                <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs p-3 rounded-xl mb-4 leading-relaxed">
+                  🛡️ <strong>Perishable Guard Enforcement:</strong> The backend will automatically deplete stock from the earliest expiring batch before touching newer batches.
+                </div>
+
+                <form onSubmit={handleDeductFIFO} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Units to Deduct *</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      max={deductModalItem.totalStock}
+                      placeholder={`1 - ${deductModalItem.totalStock}`}
+                      value={deductQty}
+                      onChange={e => setDeductQty(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeductModalItem(null)}
+                      className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-xs"
+                    >
+                      Execute FIFO Deduction
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
