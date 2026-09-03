@@ -8,38 +8,58 @@ datasource db {
 }
 
 model Vendor {
-  id        String           @id @default(uuid())
-  email     String           @unique
-  password  String
-  name      String
-  items     InventoryItem[]
-  batches   InventoryBatch[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id           String            @id @default(uuid())
+  email        String            @unique
+  password     String
+  name         String
+  items        InventoryItem[]
+  batches      InventoryBatch[]
+  transactions SaleTransaction[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 }
 
 model InventoryItem {
-  id           String           @id @default(uuid())
+  id           String            @id @default(uuid())
   name         String
   price        Float
-  minThreshold Int              @default(5)
+  barcode      String?           // Optional for loose raw items, required if isPackaged
+  isPackaged   Boolean           @default(false)
+  isPerishable Boolean           @default(false)
+  minThreshold Int               @default(5)
   vendorId     String
-  vendor       Vendor           @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendor       Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   batches      InventoryBatch[]
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  transactions SaleTransaction[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 }
 
 model InventoryBatch {
-  id              String        @id @default(uuid())
+  id              String            @id @default(uuid())
   batchId         String
   quantity        Int
   initialQuantity Int
-  expirationDate  DateTime
+  expirationDate  DateTime?         // Mandatory if item.isPerishable is true
   itemId          String
-  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item            InventoryItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   vendorId        String
-  vendor          Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  vendor          Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  transactions    SaleTransaction[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model SaleTransaction {
+  id        String          @id @default(uuid())
+  type      String          @default("Quick Sale") // "Quick Sale" or "Manual Sale"
+  quantity  Int             @default(1)
+  barcode   String?
+  itemId    String
+  item      InventoryItem   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  batchId   String?
+  batch     InventoryBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  vendorId  String
+  vendor    Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
 }

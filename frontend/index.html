@@ -1,56 +1,2026 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-slate-50">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Multi-Tenant Vendor Inventory Management</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Nexus Stock — Intelligent Inventory & Rapid Outgoing</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- html5-qrcode for mobile camera barcode scanning -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- React 18 & Babel Standalone -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+    #reader video, #rapid-reader video { border-radius: 0.75rem; object-fit: cover; width: 100% !important; }
+    #reader, #rapid-reader { border: none !important; }
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { 
+      -webkit-appearance: none; 
+      margin: 0; 
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen">
-  <div id="root"></div>
+<body class="h-full text-slate-800 bg-slate-50 antialiased selection:bg-brand-500 selection:text-white">
+  <div id="root" class="h-full flex flex-col">
+    <div class="min-h-screen flex items-center justify-center text-slate-400 text-sm font-medium">
+      <div class="flex items-center gap-2">
+        <svg class="animate-spin h-5 w-5 text-indigo-500" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span>Loading Nexus Stock...</span>
+      </div>
+    </div>
+  </div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
     const API_URL = 'http://localhost:5000';
 
+    // Soft Professional SVG Icons with customizable coloring
+    const Icons = {
+      Box: ({ className = "w-4 h-4 text-indigo-500", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+      ),
+      Scan: ({ className = "w-4 h-4 text-indigo-500", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" x2="17" y1="12" y2="12"/></svg>
+      ),
+      Zap: ({ className = "w-4 h-4 text-amber-500", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      ),
+      Receipt: ({ className = "w-4 h-4 text-indigo-500", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg>
+      ),
+      Plus: ({ className = "w-4 h-4", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      ),
+      Minus: ({ className = "w-3.5 h-3.5", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M5 12h14"/></svg>
+      ),
+      Trash: ({ className = "w-4 h-4", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+      ),
+      Search: ({ className = "w-4 h-4 text-slate-400", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      ),
+      CheckCircle: ({ className = "w-4 h-4 text-emerald-500", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      ),
+      AlertCircle: ({ className = "w-4 h-4 text-amber-500", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+      ),
+      AlertOctagon: ({ className = "w-4 h-4 text-rose-500", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+      ),
+      LogOut: ({ className = "w-4 h-4", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+      ),
+      Refresh: ({ className = "w-4 h-4", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+      ),
+      X: ({ className = "w-4 h-4", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      ),
+      Clock: ({ className = "w-3.5 h-3.5 text-slate-400", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      ),
+      ArrowRight: ({ className = "w-4 h-4", ...props }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      )
+    };
+
+    // Soft audio chime feedback for scans
+    const playBeep = (freq = 880, duration = 90) => {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration / 1000);
+        osc.start();
+        osc.stop(ctx.currentTime + duration / 1000);
+      } catch (e) {}
+    };
+
     function App() {
-      const [token, setToken] = useState(localStorage.getItem('vendor_token') || null);
-      const [vendor, setVendor] = useState(JSON.parse(localStorage.getItem('vendor_user') || 'null'));
+      const [token, setToken] = useState(() => {
+        try { return localStorage.getItem('vendor_token') || null; } catch (e) { return null; }
+      });
+      const [vendor, setVendor] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('vendor_user') || 'null'); } catch (e) { return null; }
+      });
+      const [currentRoute, setCurrentRoute] = useState(() => {
+        const p = window.location.pathname;
+        if (p === '/rapid-out') return '/rapid-out';
+        if (p === '/quick-sale') return '/quick-sale';
+        return '/dashboard';
+      });
+
+      useEffect(() => {
+        const handlePopState = () => {
+          const p = window.location.pathname;
+          if (p === '/rapid-out') setCurrentRoute('/rapid-out');
+          else if (p === '/quick-sale') setCurrentRoute('/quick-sale');
+          else setCurrentRoute('/dashboard');
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+      }, []);
+
+      const navigate = (path) => {
+        try { window.history.pushState({}, '', path); } catch (e) {}
+        setCurrentRoute(path);
+      };
 
       const handleLoginSuccess = (newToken, newVendor) => {
-        localStorage.setItem('vendor_token', newToken);
-        localStorage.setItem('vendor_user', JSON.stringify(newVendor));
+        try {
+          localStorage.setItem('vendor_token', newToken);
+          localStorage.setItem('vendor_user', JSON.stringify(newVendor));
+        } catch (e) {}
         setToken(newToken);
         setVendor(newVendor);
       };
 
       const handleLogout = () => {
-        localStorage.removeItem('vendor_token');
-        localStorage.removeItem('vendor_user');
+        try {
+          localStorage.removeItem('vendor_token');
+          localStorage.removeItem('vendor_user');
+        } catch (e) {}
         setToken(null);
         setVendor(null);
       };
 
+      if (!token) {
+        return <Auth onLoginSuccess={handleLoginSuccess} />;
+      }
+
       return (
-        <div>
-          {token ? (
-            <Dashboard token={token} vendor={vendor} onLogout={handleLogout} />
-          ) : (
-            <Auth onLoginSuccess={handleLoginSuccess} />
+        <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 pb-20 md:pb-0">
+          {/* Top Modern Header with Soft Warm Neutrals */}
+          <header className="bg-white border-b border-slate-200/80 sticky top-0 z-40 shadow-sm">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between h-16 items-center">
+                {/* Brand & Organization Identity */}
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
+                    <Icons.Box className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h1 className="text-sm font-semibold tracking-tight text-slate-800 leading-none">
+                      {vendor?.name || 'Nexus Inventory'}
+                    </h1>
+                    <p className="text-xs font-mono text-slate-500 mt-1">
+                      {vendor?.email}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Desktop Sleek Navigation Bar with Soft Brand States */}
+                <nav className="hidden md:flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200">
+                  <button
+                    onClick={() => navigate('/dashboard')}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out ${
+                      currentRoute === '/dashboard' 
+                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/60 font-semibold' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <Icons.Box className={`w-4 h-4 ${currentRoute === '/dashboard' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                    <span>Catalog & Health</span>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/rapid-out')}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out ${
+                      currentRoute === '/rapid-out' 
+                        ? 'bg-indigo-500 text-white shadow-sm font-semibold hover:bg-indigo-600' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <Icons.Zap className={`w-4 h-4 ${currentRoute === '/rapid-out' ? 'text-amber-200' : 'text-amber-500'}`} />
+                    <span>Rapid Out (Trader)</span>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/quick-sale')}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ease-in-out ${
+                      currentRoute === '/quick-sale' 
+                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/60 font-semibold' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <Icons.Scan className={`w-4 h-4 ${currentRoute === '/quick-sale' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                    <span>Quick Scan</span>
+                  </button>
+                </nav>
+
+                {/* User Actions */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-1.5 px-3 h-9 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all duration-200 ease-in-out"
+                    title="Sign Out"
+                  >
+                    <Icons.LogOut className="w-4 h-4 text-slate-500" />
+                    <span className="hidden sm:inline">Sign out</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Workspace Area with Soft Neutrals */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            {currentRoute === '/rapid-out' ? (
+              <RapidBulkOut token={token} onNavigate={navigate} />
+            ) : currentRoute === '/quick-sale' ? (
+              <QuickSaleView token={token} onNavigate={navigate} />
+            ) : (
+              <DashboardView token={token} vendor={vendor} onNavigate={navigate} onLogout={handleLogout} />
+            )}
+          </main>
+
+          {/* Mobile Bottom Tab Bar */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 z-50 flex justify-around items-center shadow-lg">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[11px] font-medium transition-all duration-200 ease-in-out ${
+                currentRoute === '/dashboard' ? 'text-indigo-600 font-semibold' : 'text-slate-500'
+              }`}
+            >
+              <Icons.Box className={`w-5 h-5 ${currentRoute === '/dashboard' ? 'text-indigo-600' : 'text-slate-400'}`} />
+              <span>Catalog</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/rapid-out')}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[11px] font-medium transition-all duration-200 ease-in-out ${
+                currentRoute === '/rapid-out' ? 'text-indigo-600 font-semibold' : 'text-slate-500'
+              }`}
+            >
+              <Icons.Zap className={`w-5 h-5 ${currentRoute === '/rapid-out' ? 'text-indigo-600' : 'text-amber-500'}`} />
+              <span>Rapid Out</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/quick-sale')}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[11px] font-medium transition-all duration-200 ease-in-out ${
+                currentRoute === '/quick-sale' ? 'text-indigo-600 font-semibold' : 'text-slate-500'
+              }`}
+            >
+              <Icons.Scan className={`w-5 h-5 ${currentRoute === '/quick-sale' ? 'text-indigo-600' : 'text-slate-400'}`} />
+              <span>Quick Scan</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // 1. RAPID-FIRE BULK OUTGOING SCANNER (FOR TRADERS)
+    // =========================================================================
+    function RapidBulkOut({ token, onNavigate }) {
+      const [toast, setToast] = useState(null);
+      const [cameraError, setCameraError] = useState(null);
+      const [processingBill, setProcessingBill] = useState(false);
+      const [invoiceNumber, setInvoiceNumber] = useState('');
+      const [billSuccessSummary, setBillSuccessSummary] = useState(null);
+
+      const [stagedItems, setStagedItems] = useState([]);
+      const [catalogItems, setCatalogItems] = useState([]);
+
+      const [unregisteredBarcode, setUnregisteredBarcode] = useState(null);
+      const [regName, setRegName] = useState('');
+      const [regPrice, setRegPrice] = useState('');
+      const [regInitialQty, setRegInitialQty] = useState('50');
+      const [regIsPackaged, setRegIsPackaged] = useState(true);
+      const [regIsPerishable, setRegIsPerishable] = useState(false);
+      const [regExpiry, setRegExpiry] = useState('');
+      const [regError, setRegError] = useState('');
+      const [regLoading, setRegLoading] = useState(false);
+
+      const html5QrCodeRef = useRef(null);
+      const lastScannedBarcodeRef = useRef(null);
+      const lastScanTimeRef = useRef(0);
+      const catalogItemsRef = useRef([]);
+
+      catalogItemsRef.current = catalogItems;
+
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type, id: Date.now() });
+        setTimeout(() => setToast(null), 3000);
+      };
+
+      const fetchCatalog = async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/inventory`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setCatalogItems(Array.isArray(data) ? data : []);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      useEffect(() => {
+        fetchCatalog();
+      }, []);
+
+      useEffect(() => {
+        if (!unregisteredBarcode && !billSuccessSummary) {
+          startScanner();
+        } else {
+          stopScanner();
+        }
+
+        return () => {
+          stopScanner();
+        };
+      }, [unregisteredBarcode, billSuccessSummary]);
+
+      const startScanner = async () => {
+        try {
+          setCameraError(null);
+          if (typeof Html5Qrcode === 'undefined') {
+            setCameraError("Camera scanner library loading. Use barcode test input below if needed.");
+            return;
+          }
+          if (!html5QrCodeRef.current) {
+            html5QrCodeRef.current = new Html5Qrcode("rapid-reader");
+          }
+
+          const qrCodeSuccessCallback = (decodedText) => {
+            handleRapidBarcodeScanned(decodedText.trim());
+          };
+
+          const config = {
+            fps: 20,
+            qrbox: { width: 260, height: 180 },
+            aspectRatio: 1.333
+          };
+
+          await html5QrCodeRef.current.start(
+            { facingMode: "environment" },
+            config,
+            qrCodeSuccessCallback
+          );
+        } catch (err) {
+          setCameraError("Camera permission denied or device unsupported. Use manual barcode input below.");
+        }
+      };
+
+      const stopScanner = async () => {
+        if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+          try {
+            await html5QrCodeRef.current.stop();
+          } catch (e) {}
+        }
+      };
+
+      const handleRapidBarcodeScanned = (barcode) => {
+        const now = Date.now();
+        if (lastScannedBarcodeRef.current === barcode && now - lastScanTimeRef.current < 1200) {
+          return;
+        }
+        lastScannedBarcodeRef.current = barcode;
+        lastScanTimeRef.current = now;
+
+        const currentCatalog = catalogItemsRef.current;
+        const matchedItem = currentCatalog.find(i => i.barcode && i.barcode.trim() === barcode.trim());
+
+        if (matchedItem) {
+          playBeep(980, 100);
+          showToast(`Added ${matchedItem.name} to bill`, 'success');
+
+          setStagedItems(prev => {
+            const existingIdx = prev.findIndex(p => p.productId === matchedItem.id);
+            if (existingIdx >= 0) {
+              const updated = [...prev];
+              const currentQty = updated[existingIdx].quantity;
+              const maxStock = updated[existingIdx].availableStock;
+              const nextQty = currentQty + 1;
+              updated[existingIdx] = {
+                ...updated[existingIdx],
+                quantity: maxStock > 0 ? Math.min(nextQty, maxStock) : nextQty
+              };
+              return updated;
+            } else {
+              return [{
+                productId: matchedItem.id,
+                name: matchedItem.name,
+                barcode: matchedItem.barcode,
+                price: matchedItem.price,
+                availableStock: matchedItem.totalStock,
+                quantity: 1,
+                isPerishable: matchedItem.isPerishable
+              }, ...prev];
+            }
+          });
+        } else {
+          playBeep(440, 200);
+          stopScanner();
+          setUnregisteredBarcode(barcode);
+          setRegName('');
+          setRegPrice('');
+          setRegInitialQty('50');
+          setRegIsPackaged(true);
+          setRegIsPerishable(false);
+          setRegExpiry('');
+          setRegError('');
+        }
+      };
+
+      const handleRegisterAndStage = async (e) => {
+        e.preventDefault();
+        setRegError('');
+        setRegLoading(true);
+
+        try {
+          const res = await fetch(`${API_URL}/api/inventory`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name: regName,
+              price: Number(regPrice),
+              barcode: unregisteredBarcode,
+              isPackaged: regIsPackaged,
+              isPerishable: regIsPerishable,
+              minThreshold: 5,
+              quantity: Number(regInitialQty) || 0,
+              expirationDate: regIsPerishable ? regExpiry : undefined
+            })
+          });
+
+          const data = await res.json();
+          if (res.ok) {
+            playBeep(1046, 120);
+            showToast(`Registered & added ${regName}`, 'success');
+
+            setStagedItems(prev => [{
+              productId: data.id,
+              name: data.name,
+              barcode: data.barcode,
+              price: data.price,
+              availableStock: Number(regInitialQty) || 0,
+              quantity: 1,
+              isPerishable: data.isPerishable
+            }, ...prev]);
+
+            setUnregisteredBarcode(null);
+            fetchCatalog();
+          } else {
+            setRegError(data.error || 'Failed to register product.');
+          }
+        } catch (err) {
+          setRegError('Server connection failed.');
+        } finally {
+          setRegLoading(false);
+        }
+      };
+
+      const handleUpdateQuantity = (productId, val) => {
+        const num = parseInt(val, 10);
+        setStagedItems(prev => prev.map(item => {
+          if (item.productId !== productId) return item;
+          if (isNaN(num) || num < 1) return { ...item, quantity: '' };
+          const clamped = Math.min(num, item.availableStock > 0 ? item.availableStock : 1);
+          return { ...item, quantity: clamped };
+        }));
+      };
+
+      const handleRemoveStagedItem = (productId) => {
+        setStagedItems(prev => prev.filter(item => item.productId !== productId));
+      };
+
+      const handleProcessEntireBill = async () => {
+        if (stagedItems.length === 0) return;
+
+        for (const item of stagedItems) {
+          const q = parseInt(item.quantity, 10);
+          if (isNaN(q) || q <= 0) {
+            showToast(`Please enter a valid quantity for "${item.name}".`, 'error');
+            return;
+          }
+          if (q > item.availableStock) {
+            showToast(`Insufficient stock for "${item.name}". Max available: ${item.availableStock}.`, 'error');
+            return;
+          }
+        }
+
+        setProcessingBill(true);
+        try {
+          const payload = {
+            invoiceNumber: invoiceNumber.trim() || undefined,
+            items: stagedItems.map(i => ({
+              productId: i.productId,
+              quantity: parseInt(i.quantity, 10)
+            }))
+          };
+
+          const res = await fetch(`${API_URL}/api/inventory/bulk-issue`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+          if (res.ok) {
+            playBeep(1200, 250);
+            setBillSuccessSummary(data);
+            setStagedItems([]);
+            setInvoiceNumber('');
+            fetchCatalog();
+          } else {
+            playBeep(300, 300);
+            showToast(data.error || 'Failed to execute bulk transaction.', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to connect to backend server.', 'error');
+        } finally {
+          setProcessingBill(false);
+        }
+      };
+
+      const totalStagedUnits = stagedItems.reduce((sum, i) => sum + (parseInt(i.quantity, 10) || 0), 0);
+      const totalStagedBillValue = stagedItems.reduce((sum, i) => sum + (i.price * (parseInt(i.quantity, 10) || 0)), 0);
+
+      return (
+        <div className="max-w-2xl mx-auto space-y-6">
+          {/* Section Header */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-slate-800">Rapid-Fire Trader Outgoing</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Continuous barcode scanning with atomic multi-item FEFO deduction.</p>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+              <span>Continuous Scanner Active</span>
+            </div>
+          </div>
+
+          {/* Toast Notification with Soft Semantic Colors */}
+          {toast && (
+            <div className={`p-4 rounded-xl text-xs font-medium shadow-sm border flex justify-between items-center transition-all duration-200 ease-in-out animate-in fade-in ${
+              toast.type === 'success' 
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                : 'bg-rose-50 text-rose-800 border-rose-200'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                {toast.type === 'success' ? <Icons.CheckCircle className="w-4 h-4 text-emerald-600" /> : <Icons.AlertOctagon className="w-4 h-4 text-rose-600" />}
+                <span>{toast.message}</span>
+              </div>
+              <button onClick={() => setToast(null)} className="text-slate-400 hover:text-slate-700">
+                <Icons.X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Bill Processing Success Banner */}
+          {billSuccessSummary && (
+            <div className="bg-white border border-emerald-200 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                  <Icons.CheckCircle className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800">Trader Bill Processed Successfully</h3>
+                  <p className="text-xs text-slate-500">{billSuccessSummary.message}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-xs">
+                <div>
+                  <span className="text-slate-500 block">Line Items</span>
+                  <span className="font-semibold text-slate-800 text-sm">{billSuccessSummary.itemsProcessed}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Total Units</span>
+                  <span className="font-semibold text-indigo-600 text-sm">{billSuccessSummary.totalUnitsDeducted}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Total Value</span>
+                  <span className="font-mono font-semibold text-emerald-600 text-sm">${Number(billSuccessSummary.totalBillValue).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setBillSuccessSummary(null)}
+                className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow-sm hover:shadow-md transition-all duration-200 ease-in-out flex items-center justify-center gap-2"
+              >
+                <span>Process Another Bill</span>
+                <Icons.ArrowRight className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          )}
+
+          {/* Camera Scanner Viewport */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
+            <div id="rapid-reader" className="w-full bg-slate-900 rounded-xl overflow-hidden min-h-[220px] flex items-center justify-center"></div>
+
+            {cameraError && (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl flex items-center gap-2">
+                <Icons.AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                <span>{cameraError}</span>
+              </div>
+            )}
+
+            {/* Quick Barcode Input Fallback */}
+            <div className="pt-2 flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  id="rapid-barcode-input"
+                  placeholder="Scan or enter barcode number..."
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 placeholder-slate-400 font-mono focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.target.value.trim()) {
+                      handleRapidBarcodeScanned(e.target.value.trim());
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => {
+                  const input = document.getElementById('rapid-barcode-input');
+                  if (input && input.value.trim()) {
+                    handleRapidBarcodeScanned(input.value.trim());
+                    input.value = '';
+                  }
+                }}
+                className="h-11 px-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-medium transition-all duration-200 ease-in-out shrink-0 shadow-sm"
+              >
+                Add item
+              </button>
+            </div>
+          </div>
+
+          {/* Temporary Bill Transaction List */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-semibold tracking-tight text-slate-800">
+                  Staged Items ({stagedItems.length})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Total Units: <strong className="text-slate-800 font-medium">{totalStagedUnits}</strong> • Total Value: <strong className="text-emerald-600 font-mono font-medium">${totalStagedBillValue.toFixed(2)}</strong>
+                </p>
+              </div>
+
+              {stagedItems.length > 0 && (
+                <button
+                  onClick={() => setStagedItems([])}
+                  className="text-xs font-medium text-rose-600 hover:text-rose-700 transition-colors"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+
+            {/* Optional Bill Number Input */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Invoice / Bill Reference (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. INV-2026-09"
+                value={invoiceNumber}
+                onChange={e => setInvoiceNumber(e.target.value)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 font-mono focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+              />
+            </div>
+
+            {stagedItems.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                No items staged in this bill. Scan barcodes above to start accumulating line items.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                {stagedItems.map((item, idx) => {
+                  const itemTotal = (item.price * (parseInt(item.quantity, 10) || 0));
+                  const isStockExceeded = (parseInt(item.quantity, 10) || 0) > item.availableStock;
+
+                  return (
+                    <div key={item.productId} className={`py-3 px-2 rounded-xl transition-all duration-200 ease-in-out flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                      isStockExceeded ? 'bg-rose-50/60 border border-rose-100' : 'hover:bg-slate-50'
+                    }`}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-slate-800 truncate">{item.name}</span>
+                          {item.isPerishable && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                              Perishable
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
+                          <span className="font-mono text-slate-400">{item.barcode || 'No barcode'}</span>
+                          <span>•</span>
+                          <span className="text-slate-600">${item.price.toFixed(2)}/unit</span>
+                          <span>•</span>
+                          <span className={isStockExceeded ? 'text-rose-600 font-medium' : 'text-emerald-600 font-medium'}>
+                            Avail: {item.availableStock}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Stepper & Line Action */}
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                        <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 h-9 p-0.5 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(item.productId, (parseInt(item.quantity || 1, 10) - 1))}
+                            disabled={item.quantity <= 1}
+                            className="w-8 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 disabled:opacity-30 transition-colors"
+                          >
+                            <Icons.Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            max={item.availableStock || 9999}
+                            value={item.quantity}
+                            onChange={(e) => handleUpdateQuantity(item.productId, e.target.value)}
+                            className="w-12 bg-transparent text-center text-xs font-semibold text-slate-800 font-mono focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(item.productId, (parseInt(item.quantity || 0, 10) + 1))}
+                            disabled={item.quantity >= item.availableStock}
+                            className="w-8 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 disabled:opacity-30 transition-colors"
+                          >
+                            <Icons.Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="text-right min-w-[70px]">
+                          <span className="text-xs font-mono font-semibold text-slate-800">${itemTotal.toFixed(2)}</span>
+                        </div>
+
+                        <button
+                          onClick={() => handleRemoveStagedItem(item.productId)}
+                          className="text-slate-400 hover:text-rose-600 p-1.5 transition-colors"
+                          title="Remove item"
+                        >
+                          <Icons.Trash className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Confirm & Process Entire Bill */}
+            <button
+              onClick={handleProcessEntireBill}
+              disabled={stagedItems.length === 0 || processingBill}
+              className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ease-in-out disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+            >
+              {processingBill ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span>Processing atomic transaction...</span>
+                </>
+              ) : (
+                <>
+                  <Icons.Receipt className="w-4 h-4 text-white" />
+                  <span>Confirm and Process Entire Bill ({stagedItems.length} Items)</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Quick Registration Modal */}
+          {unregisteredBarcode && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-lg animate-in fade-in zoom-in-95">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-semibold tracking-tight text-slate-800">Register New Inventory Item</h3>
+                  <button onClick={() => setUnregisteredBarcode(null)} className="text-slate-400 hover:text-slate-700">
+                    <Icons.X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 mb-4 font-mono">
+                  Scanned Barcode: <strong className="text-slate-800">{unregisteredBarcode}</strong>
+                </div>
+
+                {regError && (
+                  <div className="bg-rose-50 border border-rose-200 text-rose-600 text-xs p-3 rounded-xl mb-4 flex items-center gap-2">
+                    <Icons.AlertOctagon className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>{regError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleRegisterAndStage} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Product Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Standard Cooking Oil 1L"
+                      value={regName}
+                      onChange={e => setRegName(e.target.value)}
+                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Price ($) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="4.50"
+                        value={regPrice}
+                        onChange={e => setRegPrice(e.target.value)}
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Initial Stock Qty</label>
+                      <input
+                        type="number"
+                        placeholder="50"
+                        value={regInitialQty}
+                        onChange={e => setRegInitialQty(e.target.value)}
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={regIsPackaged}
+                        onChange={e => setRegIsPackaged(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-500 focus:ring-0"
+                      />
+                      <span>Packaged Goods</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={regIsPerishable}
+                        onChange={e => setRegIsPerishable(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-500 focus:ring-0"
+                      />
+                      <span>Perishable Goods</span>
+                    </label>
+                  </div>
+
+                  {regIsPerishable && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Batch Expiration Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={regExpiry}
+                        onChange={e => setRegExpiry(e.target.value)}
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setUnregisteredBarcode(null)}
+                      className="px-4 h-11 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={regLoading}
+                      className="px-5 h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow-sm transition-all duration-200 ease-in-out"
+                    >
+                      {regLoading ? 'Saving...' : 'Register and add to bill'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           )}
         </div>
       );
     }
 
+    // =========================================================================
+    // 2. MOBILE-FIRST QUICK SCANNER & MANUAL SALE (/quick-sale)
+    // =========================================================================
+    function QuickSaleView({ token, onNavigate }) {
+      const [toast, setToast] = useState(null);
+      const [cameraError, setCameraError] = useState(null);
+      const [recentSales, setRecentSales] = useState([]);
+      const [isProcessingScan, setIsProcessingScan] = useState(false);
+
+      const [unregisteredBarcode, setUnregisteredBarcode] = useState(null);
+      const [regName, setRegName] = useState('');
+      const [regPrice, setRegPrice] = useState('');
+      const [regIsPackaged, setRegIsPackaged] = useState(true);
+      const [regIsPerishable, setRegIsPerishable] = useState(false);
+      const [regInitialQty, setRegInitialQty] = useState('10');
+      const [regExpiry, setRegExpiry] = useState('');
+      const [regMinThreshold, setRegMinThreshold] = useState('5');
+      const [regError, setRegError] = useState('');
+      const [regLoading, setRegLoading] = useState(false);
+
+      const [searchQuery, setSearchQuery] = useState('');
+      const [inventoryItems, setInventoryItems] = useState([]);
+      const [manualLoading, setManualLoading] = useState(false);
+      const [quantities, setQuantities] = useState({});
+
+      const html5QrCodeRef = useRef(null);
+
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type, id: Date.now() });
+        setTimeout(() => setToast(null), 3500);
+      };
+
+      const fetchItems = async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/inventory`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setInventoryItems(Array.isArray(data) ? data : []);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      useEffect(() => {
+        fetchItems();
+      }, []);
+
+      useEffect(() => {
+        if (!unregisteredBarcode) {
+          startScanner();
+        } else {
+          stopScanner();
+        }
+
+        return () => {
+          stopScanner();
+        };
+      }, [unregisteredBarcode]);
+
+      const startScanner = async () => {
+        try {
+          setCameraError(null);
+          if (typeof Html5Qrcode === 'undefined') {
+            setCameraError("Camera scanner library loading. Use barcode input if needed.");
+            return;
+          }
+          if (!html5QrCodeRef.current) {
+            html5QrCodeRef.current = new Html5Qrcode("reader");
+          }
+
+          const qrCodeSuccessCallback = async (decodedText) => {
+            if (isProcessingScan) return;
+            handleBarcodeScanned(decodedText.trim());
+          };
+
+          const config = {
+            fps: 15,
+            qrbox: { width: 250, height: 180 },
+            aspectRatio: 1.333
+          };
+
+          await html5QrCodeRef.current.start(
+            { facingMode: "environment" },
+            config,
+            qrCodeSuccessCallback
+          );
+        } catch (err) {
+          setCameraError("Camera permission denied or unsupported. Use input below.");
+        }
+      };
+
+      const stopScanner = async () => {
+        if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+          try {
+            await html5QrCodeRef.current.stop();
+          } catch (e) {}
+        }
+      };
+
+      const handleBarcodeScanned = async (barcode) => {
+        setIsProcessingScan(true);
+        try {
+          const res = await fetch(`${API_URL}/api/inventory/quick-scan-sale`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ barcode })
+          });
+
+          const data = await res.json();
+
+          if (res.ok && data.found) {
+            playBeep(880, 100);
+            showToast(`Sold 1x ${data.item.name}. Remaining: ${data.stockRemaining}`, 'success');
+            setRecentSales(prev => [{
+              name: data.item.name,
+              barcode: data.item.barcode,
+              price: data.item.price,
+              time: new Date().toLocaleTimeString(),
+              stockRemaining: data.stockRemaining,
+              batchId: data.deductedBatch?.batchId,
+              qty: 1
+            }, ...prev.slice(0, 4)]);
+            fetchItems();
+          } else if (res.status === 404 || (data && !data.found)) {
+            await stopScanner();
+            setUnregisteredBarcode(barcode);
+            setRegName('');
+            setRegPrice('');
+            setRegIsPackaged(true);
+            setRegIsPerishable(false);
+            setRegInitialQty('10');
+            setRegExpiry('');
+            setRegMinThreshold('5');
+            setRegError('');
+          } else {
+            showToast(data.error || 'Deduction failed', 'error');
+          }
+        } catch (err) {
+          showToast('Failed to connect to backend server.', 'error');
+        } finally {
+          setTimeout(() => setIsProcessingScan(false), 1500);
+        }
+      };
+
+      const handleRegisterNewItem = async (e) => {
+        e.preventDefault();
+        setRegError('');
+        setRegLoading(true);
+
+        try {
+          const res = await fetch(`${API_URL}/api/inventory`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name: regName,
+              price: Number(regPrice),
+              barcode: unregisteredBarcode,
+              isPackaged: regIsPackaged,
+              isPerishable: regIsPerishable,
+              minThreshold: Number(regMinThreshold) || 5,
+              quantity: Number(regInitialQty) || 0,
+              expirationDate: regIsPerishable ? regExpiry : undefined
+            })
+          });
+
+          const data = await res.json();
+          if (res.ok) {
+            playBeep(1046, 120);
+            showToast(`Registered "${regName}" successfully`, 'success');
+            setUnregisteredBarcode(null);
+            fetchItems();
+          } else {
+            setRegError(data.error || 'Failed to register product.');
+          }
+        } catch (err) {
+          setRegError('Server connection failed.');
+        } finally {
+          setRegLoading(false);
+        }
+      };
+
+      const handleQuantityChange = (itemId, val, maxStock) => {
+        const num = parseInt(val, 10);
+        if (isNaN(num) || num < 1) {
+          setQuantities(prev => ({ ...prev, [itemId]: '' }));
+        } else {
+          const clamped = Math.min(num, maxStock > 0 ? maxStock : 1);
+          setQuantities(prev => ({ ...prev, [itemId]: clamped }));
+        }
+      };
+
+      const handleManualBulkDeduct = async (item) => {
+        const qtyToDeduct = parseInt(quantities[item.id] || 1, 10);
+        if (qtyToDeduct <= 0) return;
+        if (qtyToDeduct > item.totalStock) {
+          showToast(`Only ${item.totalStock} units available for ${item.name}.`, 'error');
+          return;
+        }
+
+        setManualLoading(true);
+        try {
+          const res = await fetch(`${API_URL}/api/inventory/${item.id}/deduct`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              quantity: qtyToDeduct,
+              reason: 'Direct Sale (FEFO)'
+            })
+          });
+
+          const data = await res.json();
+          if (res.ok) {
+            playBeep(880, 100);
+            showToast(`Sold ${qtyToDeduct}x ${item.name}. Stock remaining: ${data.totalStockRemaining}`, 'success');
+            setRecentSales(prev => [{
+              name: item.name,
+              barcode: item.barcode || 'Direct/Produce',
+              price: (item.price * qtyToDeduct),
+              time: new Date().toLocaleTimeString(),
+              stockRemaining: data.totalStockRemaining,
+              batchId: data.deductions?.map(d => `${d.batchId}(-${d.deducted})`).join(', ') || 'FEFO',
+              qty: qtyToDeduct
+            }, ...prev.slice(0, 4)]);
+            
+            setQuantities(prev => ({ ...prev, [item.id]: 1 }));
+            fetchItems();
+          } else {
+            showToast(data.error || 'Failed to deduct item', 'error');
+          }
+        } catch (err) {
+          showToast('Server connection failed.', 'error');
+        } finally {
+          setManualLoading(false);
+        }
+      };
+
+      const safeItems = Array.isArray(inventoryItems) ? inventoryItems : [];
+      const filteredItems = safeItems.filter(i => 
+        (i?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (i?.barcode && i.barcode.includes(searchQuery))
+      );
+
+      return (
+        <div className="max-w-2xl mx-auto space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-slate-800">Quick Scanner & Manual Sale</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Instant single-item barcode scan or manual bulk sale.</p>
+            </div>
+          </div>
+
+          {toast && (
+            <div className={`p-4 rounded-xl text-xs font-medium shadow-sm border flex justify-between items-center transition-all duration-200 ease-in-out animate-in fade-in ${
+              toast.type === 'success' 
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                : 'bg-rose-50 text-rose-800 border-rose-200'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                {toast.type === 'success' ? <Icons.CheckCircle className="w-4 h-4 text-emerald-600" /> : <Icons.AlertOctagon className="w-4 h-4 text-rose-600" />}
+                <span>{toast.message}</span>
+              </div>
+              <button onClick={() => setToast(null)} className="text-slate-400 hover:text-slate-700">
+                <Icons.X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Camera Scanner Viewport */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
+            <div id="reader" className="w-full bg-slate-900 rounded-xl overflow-hidden min-h-[220px] flex items-center justify-center"></div>
+
+            {cameraError && (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl flex items-center gap-2">
+                <Icons.AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                <span>{cameraError}</span>
+              </div>
+            )}
+
+            <div className="pt-2 flex gap-2">
+              <input
+                type="text"
+                id="manual-barcode-test"
+                placeholder="Scan or enter barcode number..."
+                className="flex-1 h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 placeholder-slate-400 font-mono focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.target.value.trim()) {
+                    handleBarcodeScanned(e.target.value.trim());
+                    e.target.value = '';
+                  }
+                }}
+              />
+              <button
+                onClick={() => {
+                  const input = document.getElementById('manual-barcode-test');
+                  if (input && input.value.trim()) {
+                    handleBarcodeScanned(input.value.trim());
+                    input.value = '';
+                  }
+                }}
+                className="h-11 px-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-medium transition-all duration-200 ease-in-out shrink-0 shadow-sm"
+              >
+                Scan
+              </button>
+            </div>
+          </div>
+
+          {/* Recent Sales History */}
+          {recentSales.length > 0 && (
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-2.5">
+              <h4 className="text-xs font-semibold text-slate-700">Recent Transactions</h4>
+              <div className="divide-y divide-slate-100">
+                {recentSales.map((sale, idx) => (
+                  <div key={idx} className="py-2.5 flex justify-between items-center text-xs">
+                    <div>
+                      <div className="font-medium text-slate-800">{sale.qty > 1 ? `${sale.qty}x ` : ''}{sale.name}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">
+                        {sale.barcode} • {sale.batchId || 'FEFO'} • {sale.time}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold text-emerald-600 font-mono">${Number(sale.price).toFixed(2)}</div>
+                      <div className="text-[11px] text-slate-500">Remaining: {sale.stockRemaining}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Manual Bulk Sale Component */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold tracking-tight text-slate-800">Manual Outgoing (Bulk & Loose Stock)</h3>
+              <p className="text-xs text-slate-500">Auto-depletion across batches using FEFO priority.</p>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search products by name or barcode..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+              />
+              <Icons.Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+            </div>
+
+            <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+              {filteredItems.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-6">No matching inventory items found.</p>
+              ) : (
+                filteredItems.map(item => {
+                  const batches = Array.isArray(item?.batches) ? item.batches : [];
+                  const activeBatches = batches.filter(b => b && b.quantity > 0);
+                  const totalStock = item?.totalStock || 0;
+                  const isOutOfStock = totalStock <= 0;
+                  const currentQty = quantities[item.id] !== undefined ? quantities[item.id] : 1;
+
+                  return (
+                    <div key={item.id} className="py-3 px-2 rounded-xl transition-all duration-200 ease-in-out flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-slate-800 truncate">{item.name}</span>
+                          {item.isPerishable && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                              Perishable
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
+                          <span className="font-mono text-slate-500">${Number(item.price || 0).toFixed(2)}</span>
+                          <span>•</span>
+                          <span className={
+                            isOutOfStock ? 'text-rose-600 font-semibold' : item.isLowStock ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-medium'
+                          }>
+                            Stock: {totalStock} units
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 h-10 p-0.5 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => handleQuantityChange(item.id, (parseInt(currentQty || 1, 10) - 1), totalStock)}
+                            disabled={isOutOfStock || currentQty <= 1}
+                            className="w-8 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 disabled:opacity-30 transition-colors"
+                          >
+                            <Icons.Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            max={totalStock || 1}
+                            disabled={isOutOfStock}
+                            value={currentQty}
+                            onChange={(e) => handleQuantityChange(item.id, e.target.value, totalStock)}
+                            className="w-10 bg-transparent text-center text-xs font-semibold text-slate-800 font-mono focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleQuantityChange(item.id, (parseInt(currentQty || 0, 10) + 1), totalStock)}
+                            disabled={isOutOfStock || currentQty >= totalStock}
+                            className="w-8 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 disabled:opacity-30 transition-colors"
+                          >
+                            <Icons.Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => handleManualBulkDeduct(item)}
+                          disabled={isOutOfStock || manualLoading || !currentQty}
+                          className="h-10 px-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-medium shadow-sm hover:shadow-md transition-all duration-200 ease-in-out disabled:opacity-40"
+                        >
+                          Sell {currentQty > 1 ? `${currentQty}x` : ''}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // 3. CATALOG & STOCK HEALTH DASHBOARD VIEW
+    // =========================================================================
+    function DashboardView({ token, vendor, onNavigate, onLogout }) {
+      const [items, setItems] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [banner, setBanner] = useState(null);
+
+      const [name, setName] = useState('');
+      const [price, setPrice] = useState('');
+      const [barcode, setBarcode] = useState('');
+      const [isPackaged, setIsPackaged] = useState(false);
+      const [isPerishable, setIsPerishable] = useState(false);
+      const [minThreshold, setMinThreshold] = useState(5);
+      const [initialQty, setInitialQty] = useState('');
+      const [batchId, setBatchId] = useState('');
+      const [expirationDate, setExpirationDate] = useState('');
+
+      const [batchModalItem, setBatchModalItem] = useState(null);
+      const [newBatchId, setNewBatchId] = useState('');
+      const [newBatchQty, setNewBatchQty] = useState('');
+      const [newBatchExpiry, setNewBatchExpiry] = useState('');
+
+      const fetchInventory = async () => {
+        setLoading(true);
+        try {
+          const res = await fetch(`${API_URL}/api/inventory`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setItems(Array.isArray(data) ? data : []);
+          } else if (res.status === 401 || res.status === 403) {
+            onLogout();
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Failed to retrieve inventory data.' });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      useEffect(() => {
+        fetchInventory();
+      }, []);
+
+      const handleCreateItem = async (e) => {
+        e.preventDefault();
+        setBanner(null);
+
+        if (isPackaged && (!barcode || barcode.trim() === '')) {
+          setBanner({ type: 'error', text: 'Barcode is mandatory for packaged products.' });
+          return;
+        }
+        if (isPerishable && initialQty && Number(initialQty) > 0 && !expirationDate) {
+          setBanner({ type: 'error', text: 'Expiry date is mandatory for perishable initial batches.' });
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API_URL}/api/inventory`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              name,
+              price: Number(price),
+              barcode: barcode || undefined,
+              isPackaged,
+              isPerishable,
+              minThreshold: Number(minThreshold),
+              quantity: initialQty ? Number(initialQty) : 0,
+              batchId: batchId || undefined,
+              expirationDate: expirationDate || undefined
+            })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setName(''); setPrice(''); setBarcode(''); setIsPackaged(false); setIsPerishable(false);
+            setMinThreshold(5); setInitialQty(''); setBatchId(''); setExpirationDate('');
+            setBanner({ type: 'success', text: `Product "${name}" registered successfully.` });
+            fetchInventory();
+          } else {
+            setBanner({ type: 'error', text: data.error || 'Failed to create product' });
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Server connection error' });
+        }
+      };
+
+      const handleAddBatch = async (e) => {
+        e.preventDefault();
+        if (!batchModalItem) return;
+        setBanner(null);
+        try {
+          const res = await fetch(`${API_URL}/api/inventory/${batchModalItem.id}/batches`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              batchId: newBatchId || undefined,
+              quantity: Number(newBatchQty),
+              expirationDate: newBatchExpiry || undefined
+            })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setBanner({ type: 'success', text: `New batch added to "${batchModalItem.name}".` });
+            setBatchModalItem(null);
+            setNewBatchId(''); setNewBatchQty(''); setNewBatchExpiry('');
+            fetchInventory();
+          } else {
+            setBanner({ type: 'error', text: data.error || 'Failed to add batch' });
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Server connection error' });
+        }
+      };
+
+      const handleDeleteItem = async (id, itemName) => {
+        if (!window.confirm(`Delete product "${itemName}" and all associated inventory batches?`)) return;
+        try {
+          const res = await fetch(`${API_URL}/api/inventory/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setBanner({ type: 'success', text: `Product "${itemName}" deleted.` });
+            fetchInventory();
+          }
+        } catch (err) {
+          setBanner({ type: 'error', text: 'Delete failed' });
+        }
+      };
+
+      const safeItems = Array.isArray(items) ? items : [];
+      const totalInventoryUnits = safeItems.reduce((sum, i) => sum + (i.totalStock || 0), 0);
+      const lowStockCount = safeItems.filter(i => i.isLowStock && (i.totalStock || 0) > 0).length;
+      const outOfStockCount = safeItems.filter(i => (i.totalStock || 0) === 0).length;
+
+      return (
+        <div className="space-y-6">
+          {/* Quick Metrics Bar with Soft Colored Icons and Warm Card States */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-indigo-100 hover:shadow-sm transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">Total Catalog Items</span>
+                <div className="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                  <Icons.Box className="w-4 h-4 text-indigo-600" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold tracking-tight text-slate-800 mt-2">{safeItems.length}</div>
+              <span className="text-[11px] text-slate-500 mt-1 block">Active SKU profiles</span>
+            </div>
+
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-indigo-100 hover:shadow-sm transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">Total Units in Stock</span>
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                  <Icons.CheckCircle className="w-4 h-4 text-emerald-600" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold tracking-tight text-emerald-600 mt-2">{totalInventoryUnits}</div>
+              <span className="text-[11px] text-slate-500 mt-1 block">Across all active batches</span>
+            </div>
+
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-indigo-100 hover:shadow-sm transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">Stock Alerts</span>
+                <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center">
+                  <Icons.AlertCircle className="w-4 h-4 text-amber-600" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2 mt-2">
+                <span className="text-2xl font-bold tracking-tight text-amber-600">{lowStockCount} Low</span>
+                {outOfStockCount > 0 && (
+                  <span className="text-xs font-semibold text-rose-600 font-mono">({outOfStockCount} Out)</span>
+                )}
+              </div>
+              <span className="text-[11px] text-slate-500 mt-1 block">Items at or below lead threshold</span>
+            </div>
+          </div>
+
+          {/* Quick Action Banner with Soft Tint */}
+          <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Icons.Zap className="w-4 h-4 text-amber-500" />
+                <h2 className="text-sm sm:text-base font-semibold text-slate-800">Trader Outgoing & Rapid Scanning</h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">Continuous camera barcode deductions for high-volume wholesale orders.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onNavigate('/rapid-out')}
+                className="h-10 px-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ease-in-out flex items-center gap-2"
+              >
+                <Icons.Zap className="w-4 h-4 text-amber-200" />
+                <span>Rapid Out Scanner</span>
+              </button>
+            </div>
+          </div>
+
+          {banner && (
+            <div className={`p-4 rounded-xl text-xs font-medium shadow-sm border flex justify-between items-center transition-all duration-200 ease-in-out animate-in fade-in ${
+              banner.type === 'error' 
+                ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                {banner.type === 'error' ? <Icons.AlertOctagon className="w-4 h-4 text-rose-500" /> : <Icons.CheckCircle className="w-4 h-4 text-emerald-600" />}
+                <span>{banner.text}</span>
+              </div>
+              <button onClick={() => setBanner(null)} className="text-slate-400 hover:text-slate-700">
+                <Icons.X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Add Product Form */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Register New Product</h3>
+            <form onSubmit={handleCreateItem} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-slate-700 mb-1">Product Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Organic Strawberries"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Price ($) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="3.99"
+                  value={price}
+                  onChange={e => setPrice(e.target.value)}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Min Threshold</label>
+                <input
+                  type="number"
+                  placeholder="5"
+                  value={minThreshold}
+                  onChange={e => setMinThreshold(e.target.value)}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Barcode {isPackaged ? <span className="text-rose-600 font-semibold">* (Mandatory)</span> : '(Optional)'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={isPackaged ? "Barcode required *" : "e.g. 8901030..."}
+                  value={barcode}
+                  onChange={e => setBarcode(e.target.value)}
+                  required={isPackaged}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 font-mono focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                />
+              </div>
+
+              <div className="sm:col-span-2 flex items-center gap-4 bg-slate-50 px-3 h-11 rounded-xl border border-slate-200 text-xs">
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={isPackaged}
+                    onChange={e => setIsPackaged(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-500 focus:ring-0"
+                  />
+                  <span>Packaged</span>
+                </label>
+
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={isPerishable}
+                    onChange={e => setIsPerishable(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-500 focus:ring-0"
+                  />
+                  <span>Perishable</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Initial Qty</label>
+                <input
+                  type="number"
+                  placeholder="20"
+                  value={initialQty}
+                  onChange={e => setInitialQty(e.target.value)}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Batch ID</label>
+                <input
+                  type="text"
+                  placeholder="LOT-101"
+                  value={batchId}
+                  onChange={e => setBatchId(e.target.value)}
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 font-mono focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                />
+              </div>
+
+              {isPerishable && (
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Expiry Date *</label>
+                  <input
+                    type="date"
+                    required={isPerishable && Boolean(initialQty && Number(initialQty) > 0)}
+                    value={expirationDate}
+                    onChange={e => setExpirationDate(e.target.value)}
+                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-end sm:col-span-2">
+                <button
+                  type="submit"
+                  className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ease-in-out"
+                >
+                  Save Product
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Desktop Data Table / Mobile Cards with Semantic Badges */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-200/80 flex justify-between items-center bg-white">
+              <div>
+                <h3 className="text-sm font-semibold tracking-tight text-slate-800">Inventory Catalog</h3>
+                <p className="text-xs text-slate-500">Live batches, stock health, and FEFO allocation status.</p>
+              </div>
+              <button
+                onClick={fetchInventory}
+                className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+              >
+                <Icons.Refresh className="w-3.5 h-3.5 text-slate-400" />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="p-12 text-center text-xs text-slate-400">Loading catalog...</div>
+            ) : safeItems.length === 0 ? (
+              <div className="p-12 text-center text-xs text-slate-400">No inventory products found. Register one above.</div>
+            ) : (
+              <>
+                {/* Desktop Airy Table View with Semantic Color Highlights */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-100 text-left text-xs">
+                    <thead className="bg-slate-50/80 text-slate-500 font-medium uppercase tracking-wider">
+                      <tr>
+                        <th className="px-5 py-3.5">Product</th>
+                        <th className="px-5 py-3.5">Barcode</th>
+                        <th className="px-5 py-3.5">Price</th>
+                        <th className="px-5 py-3.5">Total Stock</th>
+                        <th className="px-5 py-3.5">Active Batches (FEFO)</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {safeItems.map(item => {
+                        const batches = Array.isArray(item?.batches) ? item.batches : [];
+                        const activeBatches = batches.filter(b => b && b.quantity > 0);
+                        const totalStock = item?.totalStock || 0;
+                        const isOutOfStock = totalStock === 0;
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="px-5 py-4 font-semibold text-slate-800">
+                              <div className="flex items-center gap-2">
+                                <span>{item.name}</span>
+                                {item.isPackaged && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                    Packaged
+                                  </span>
+                                )}
+                                {item.isPerishable && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                    Perishable
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-5 py-4 font-mono text-slate-500">
+                              {item.barcode || <span className="text-slate-400 italic">None</span>}
+                            </td>
+                            <td className="px-5 py-4 font-semibold text-slate-800 font-mono">
+                              ${Number(item.price || 0).toFixed(2)}
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                isOutOfStock 
+                                  ? 'bg-rose-50 text-rose-600 border border-rose-200' 
+                                  : item.isLowStock 
+                                    ? 'bg-amber-50 text-amber-600 border border-amber-200' 
+                                    : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                              }`}>
+                                <span className="h-1.5 w-1.5 rounded-full bg-current"></span>
+                                <span>{totalStock} units</span>
+                              </span>
+                            </td>
+                            <td className="px-5 py-4">
+                              {activeBatches.length === 0 ? (
+                                <span className="text-slate-400 italic">0 batches active</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {activeBatches.map((batch, bIdx) => {
+                                    const expiry = batch.expirationDate ? new Date(batch.expirationDate) : null;
+                                    return (
+                                      <span
+                                        key={batch.id}
+                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-mono border ${
+                                          bIdx === 0 
+                                            ? 'bg-indigo-50 border-indigo-100 text-indigo-700 font-semibold' 
+                                            : 'bg-slate-50 border-slate-200 text-slate-600'
+                                        }`}
+                                      >
+                                        <span>{batch.batchId}:</span>
+                                        <strong>{batch.quantity}u</strong>
+                                        {expiry && <span className="text-slate-400">({expiry.getMonth()+1}/{expiry.getDate()})</span>}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => setBatchModalItem(item)}
+                                  className="h-8 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-medium border border-indigo-100 transition-colors"
+                                >
+                                  + Batch
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteItem(item.id, item.name)}
+                                  className="text-slate-400 hover:text-rose-600 p-1.5 transition-colors"
+                                  title="Delete product"
+                                >
+                                  <Icons.Trash className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Cards with Semantic Highlighting */}
+                <div className="lg:hidden divide-y divide-slate-100">
+                  {safeItems.map(item => {
+                    const batches = Array.isArray(item?.batches) ? item.batches : [];
+                    const activeBatches = batches.filter(b => b && b.quantity > 0);
+                    const totalStock = item?.totalStock || 0;
+                    const isOutOfStock = totalStock === 0;
+
+                    return (
+                      <div key={item.id} className="p-4 space-y-3 hover:bg-slate-50/50 transition-colors">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-semibold text-slate-800">{item.name}</h4>
+                              {item.isPackaged && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                  Packaged
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
+                              <span className="font-semibold text-slate-800">${Number(item.price || 0).toFixed(2)}</span>
+                              <span>•</span>
+                              <span className="font-mono">{item.barcode || 'No barcode'}</span>
+                            </div>
+                          </div>
+
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            isOutOfStock 
+                              ? 'bg-rose-50 text-rose-600 border border-rose-200' 
+                              : item.isLowStock 
+                                ? 'bg-amber-50 text-amber-600 border border-amber-200' 
+                                : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                          }`}>
+                            <span className="h-1.5 w-1.5 rounded-full bg-current"></span>
+                            <span>{totalStock} units</span>
+                          </span>
+                        </div>
+
+                        {/* Batches Pill */}
+                        <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
+                          {activeBatches.length === 0 ? (
+                            <span className="text-xs text-slate-400 italic">0 batches active</span>
+                          ) : (
+                            activeBatches.map((batch, bIdx) => (
+                              <span
+                                key={batch.id}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono border ${
+                                  bIdx === 0 ? 'bg-indigo-50 border-indigo-100 text-indigo-700 font-semibold' : 'bg-slate-50 border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                <span>{batch.batchId}: {batch.quantity}u</span>
+                              </span>
+                            ))
+                          )}
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2">
+                          <button
+                            onClick={() => setBatchModalItem(item)}
+                            className="h-9 px-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 rounded-xl text-xs font-medium transition-colors"
+                          >
+                            + Add Batch
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(item.id, item.name)}
+                            className="text-slate-400 hover:text-rose-600 p-2"
+                          >
+                            <Icons.Trash className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Add Batch Modal */}
+          {batchModalItem && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-lg animate-in fade-in zoom-in-95">
+                <h4 className="text-sm font-semibold tracking-tight text-slate-800 mb-1">Add Batch Stock</h4>
+                <p className="text-xs text-slate-500 mb-4">Product: <strong className="text-slate-800">{batchModalItem.name}</strong></p>
+
+                <form onSubmit={handleAddBatch} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Batch ID</label>
+                    <input
+                      type="text"
+                      placeholder="LOT-2026-X"
+                      value={newBatchId}
+                      onChange={e => setNewBatchId(e.target.value)}
+                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 font-mono focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Quantity *</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="20"
+                      value={newBatchQty}
+                      onChange={e => setNewBatchQty(e.target.value)}
+                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Expiration Date {batchModalItem.isPerishable ? <span className="text-rose-600 font-semibold">* (Mandatory)</span> : '(Optional)'}
+                    </label>
+                    <input
+                      type="date"
+                      required={batchModalItem.isPerishable}
+                      value={newBatchExpiry}
+                      onChange={e => setNewBatchExpiry(e.target.value)}
+                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setBatchModalItem(null)}
+                      className="h-11 px-4 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="h-11 px-5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl text-xs shadow-sm transition-all duration-200 ease-in-out"
+                    >
+                      Save Batch
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // 4. AUTHENTICATION VIEW (Soft Warm SaaS Login/Signup)
+    // =========================================================================
     function Auth({ onLoginSuccess }) {
       const [isLogin, setIsLogin] = useState(true);
       const [email, setEmail] = useState('');
@@ -87,75 +2057,76 @@
       };
 
       return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white">
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="inline-flex p-3 bg-indigo-500/20 text-indigo-400 rounded-xl mb-3 border border-indigo-400/30">
-                📦
+        <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 text-slate-800 font-sans">
+          <div className="bg-white border border-slate-200/80 p-8 sm:p-10 rounded-2xl w-full max-w-md shadow-sm space-y-6">
+            <div className="text-center space-y-2">
+              <div className="inline-flex h-12 w-12 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-2xl items-center justify-center shadow-xs">
+                <Icons.Box className="w-6 h-6 text-indigo-600" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight">Vendor Portal</h1>
-              <p className="text-sm text-slate-300 mt-1">Multi-Tenant Isolated Inventory</p>
+              <h1 className="text-xl font-bold tracking-tight text-slate-800">Nexus Stock</h1>
+              <p className="text-xs text-slate-500">Modern Multi-Tenant Inventory & Rapid Outgoing</p>
             </div>
 
             {error && (
-              <div className="bg-rose-500/20 border border-rose-500/50 text-rose-200 text-xs p-3 rounded-lg mb-4">
-                {error}
+              <div className="bg-rose-50 border border-rose-200 text-rose-600 text-xs p-3.5 rounded-xl flex items-center gap-2">
+                <Icons.AlertOctagon className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{error}</span>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
                 <div>
-                  <label className="block text-xs uppercase tracking-wider text-slate-300 font-semibold mb-1">Vendor / Business Name</label>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Company / Trader Name</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Apex Electronics Ltd."
+                    placeholder="Apex Wholesale Corp"
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                    className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
                   />
                 </div>
               )}
               <div>
-                <label className="block text-xs uppercase tracking-wider text-slate-300 font-semibold mb-1">Email Address</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Email Address</label>
                 <input
                   type="email"
                   required
-                  placeholder="vendor@company.com"
+                  placeholder="admin@company.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
                 />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wider text-slate-300 font-semibold mb-1">Password</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
                 <input
                   type="password"
                   required
                   placeholder="••••••••"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all duration-200 ease-in-out"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-lg transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 text-sm"
+                className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition-all duration-200 ease-in-out shadow-sm hover:shadow-md hover:-translate-y-0.5 disabled:opacity-50 text-xs mt-2"
               >
-                {loading ? 'Please wait...' : (isLogin ? 'Sign In to Dashboard' : 'Register Vendor Account')}
+                {loading ? 'Please wait...' : (isLogin ? 'Sign in to workspace' : 'Create new account')}
               </button>
             </form>
 
-            <div className="mt-6 text-center text-xs text-slate-400">
-              {isLogin ? "Need an isolated tenant space? " : "Already have a registered account? "}
+            <div className="pt-4 text-center text-xs text-slate-500 border-t border-slate-100">
+              {isLogin ? "Don't have an account? " : "Already have an account? "}
               <button
                 onClick={() => { setIsLogin(!isLogin); setError(''); }}
-                className="text-indigo-400 hover:text-indigo-300 font-semibold underline ml-1"
+                className="text-indigo-600 hover:text-indigo-700 font-semibold underline ml-1"
               >
-                {isLogin ? 'Sign Up' : 'Log In'}
+                {isLogin ? 'Register' : 'Sign In'}
               </button>
             </div>
           </div>
@@ -163,593 +2134,12 @@
       );
     }
 
-    function Dashboard({ token, vendor, onLogout }) {
-      const [items, setItems] = useState([]);
-      const [loading, setLoading] = useState(false);
-      const [banner, setBanner] = useState(null);
-
-      // Create item form
-      const [name, setName] = useState('');
-      const [price, setPrice] = useState('');
-      const [minThreshold, setMinThreshold] = useState(5);
-      const [initialQty, setInitialQty] = useState('');
-      const [batchId, setBatchId] = useState('');
-      const [expirationDate, setExpirationDate] = useState('');
-
-      // Modals
-      const [batchModalItem, setBatchModalItem] = useState(null);
-      const [newBatchId, setNewBatchId] = useState('');
-      const [newBatchQty, setNewBatchQty] = useState('');
-      const [newBatchExpiry, setNewBatchExpiry] = useState('');
-
-      const [deductModalItem, setDeductModalItem] = useState(null);
-      const [deductQty, setDeductQty] = useState('');
-      const [deductAudit, setDeductAudit] = useState(null);
-
-      const fetchInventory = async () => {
-        setLoading(true);
-        try {
-          const res = await fetch(`${API_URL}/api/inventory`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setItems(data);
-          } else if (res.status === 401 || res.status === 403) {
-            onLogout();
-          }
-        } catch (err) {
-          setBanner({ type: 'error', text: 'Failed to fetch inventory from server.' });
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      useEffect(() => {
-        fetchInventory();
-      }, []);
-
-      const handleCreateItem = async (e) => {
-        e.preventDefault();
-        setBanner(null);
-        try {
-          const res = await fetch(`${API_URL}/api/inventory`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              name,
-              price: Number(price),
-              minThreshold: Number(minThreshold),
-              quantity: initialQty ? Number(initialQty) : 0,
-              batchId: batchId || undefined,
-              expirationDate: expirationDate || undefined
-            })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            setName(''); setPrice(''); setMinThreshold(5); setInitialQty(''); setBatchId(''); setExpirationDate('');
-            setBanner({ type: 'success', text: `Item "${name}" created with initial batch.` });
-            fetchInventory();
-          } else {
-            setBanner({ type: 'error', text: data.error || 'Failed to create item' });
-          }
-        } catch (err) {
-          setBanner({ type: 'error', text: 'Server connection error' });
-        }
-      };
-
-      const handleAddBatch = async (e) => {
-        e.preventDefault();
-        if (!batchModalItem) return;
-        setBanner(null);
-        try {
-          const res = await fetch(`${API_URL}/api/inventory/${batchModalItem.id}/batches`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              batchId: newBatchId || undefined,
-              quantity: Number(newBatchQty),
-              expirationDate: newBatchExpiry
-            })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            setBanner({ type: 'success', text: `New batch added to "${batchModalItem.name}".` });
-            setBatchModalItem(null);
-            setNewBatchId(''); setNewBatchQty(''); setNewBatchExpiry('');
-            fetchInventory();
-          } else {
-            setBanner({ type: 'error', text: data.error || 'Failed to add batch' });
-          }
-        } catch (err) {
-          setBanner({ type: 'error', text: 'Server connection error' });
-        }
-      };
-
-      const handleDeductFIFO = async (e) => {
-        e.preventDefault();
-        if (!deductModalItem) return;
-        setBanner(null);
-        setDeductAudit(null);
-
-        try {
-          const res = await fetch(`${API_URL}/api/inventory/${deductModalItem.id}/deduct`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              quantity: Number(deductQty),
-              reason: 'Customer Order Fulfillment'
-            })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            setDeductAudit(data);
-            setBanner({ type: 'success', text: data.message });
-            setDeductQty('');
-            fetchInventory();
-          } else {
-            setBanner({ type: 'error', text: data.error || 'Deduction failed' });
-          }
-        } catch (err) {
-          setBanner({ type: 'error', text: 'Server connection error' });
-        }
-      };
-
-      const handleDeleteItem = async (id, itemName) => {
-        if (!window.confirm(`Delete item "${itemName}" and all batches?`)) return;
-        try {
-          const res = await fetch(`${API_URL}/api/inventory/${id}`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (res.ok) {
-            setBanner({ type: 'success', text: `Item "${itemName}" removed.` });
-            fetchInventory();
-          }
-        } catch (err) {
-          setBanner({ type: 'error', text: 'Delete failed' });
-        }
-      };
-
-      return (
-        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          {/* Top Bar */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-8 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">🏬</span>
-                <h1 className="text-2xl font-bold text-slate-900">{vendor?.name || 'Vendor'}</h1>
-                <span className="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-indigo-200">
-                  Tenant ID: {vendor?.id?.slice(0, 8)}...
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Security: <strong className="text-slate-700">Strict Tenant Data Isolation</strong> | Logged in as: <span className="font-mono text-slate-700">{vendor?.email}</span>
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={fetchInventory}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg text-sm font-medium transition"
-              >
-                🔄 Refresh
-              </button>
-              <button
-                onClick={onLogout}
-                className="bg-rose-50 hover:bg-rose-100 text-rose-600 px-4 py-2 rounded-lg text-sm font-semibold transition border border-rose-200"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-
-          {/* Alert Banner */}
-          {banner && (
-            <div className={`p-4 rounded-xl mb-6 flex justify-between items-center text-sm font-medium ${
-              banner.type === 'error' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-            }`}>
-              <span>{banner.text}</span>
-              <button onClick={() => setBanner(null)} className="font-bold text-lg leading-none">×</button>
-            </div>
-          )}
-
-          {/* FIFO Audit Callout */}
-          {deductAudit && (
-            <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-2xl p-6 mb-8 shadow-xl border border-indigo-700/50">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-lg font-bold flex items-center gap-2">
-                    <span>⚡</span> Perishable Guard: First-In, First-Out (FIFO) Deduction Report
-                  </h3>
-                  <p className="text-xs text-indigo-200 mt-0.5">
-                    Stock deduction strictly allocated to batches with the earliest expiry dates first.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setDeductAudit(null)}
-                  className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-md text-white font-semibold transition"
-                >
-                  Dismiss
-                </button>
-              </div>
-
-              <div className="overflow-x-auto bg-slate-800/80 rounded-xl border border-slate-700">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-700/50 text-slate-300 border-b border-slate-700">
-                    <tr>
-                      <th className="p-3">Batch Identifier</th>
-                      <th className="p-3">Batch Expiry</th>
-                      <th className="p-3">Units Deducted</th>
-                      <th className="p-3">Units Remaining in Batch</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700 font-mono">
-                    {deductAudit.deductions.map((d, i) => (
-                      <tr key={i} className="hover:bg-slate-700/30">
-                        <td className="p-3 font-semibold text-indigo-300">{d.batchId}</td>
-                        <td className="p-3 text-slate-300">{new Date(d.expirationDate).toLocaleDateString()}</td>
-                        <td className="p-3 text-rose-400 font-bold">-{d.deducted} units</td>
-                        <td className="p-3 text-emerald-400">{d.remainingInBatch} units</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {deductAudit.leadTimeAlert && (
-                <div className="mt-4 p-3 bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs rounded-xl flex items-center gap-2 font-medium">
-                  <span>⚠️</span> {deductAudit.leadTimeAlert}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Grid Layout: Create Item + Inventory List */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column: Register New Item */}
-            <div className="lg:col-span-1">
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs sticky top-6">
-                <h2 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
-                  <span>➕</span> Add Inventory Item
-                </h2>
-                <p className="text-xs text-slate-500 mb-5">Configure product details, threshold, and initial batch.</p>
-
-                <form onSubmit={handleCreateItem} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Item / Product Name *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Organic Strawberries"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Price ($) *</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        required
-                        placeholder="5.99"
-                        value={price}
-                        onChange={e => setPrice(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                        Lead-Time Min Threshold
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="5"
-                        value={minThreshold}
-                        onChange={e => setMinThreshold(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100">
-                    <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Perishable Batch Details</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Initial Qty</label>
-                      <input
-                        type="number"
-                        placeholder="50"
-                        value={initialQty}
-                        onChange={e => setInitialQty(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Batch Code</label>
-                      <input
-                        type="text"
-                        placeholder="LOT-A1"
-                        value={batchId}
-                        onChange={e => setBatchId(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Batch Expiration Date</label>
-                    <input
-                      type="date"
-                      value={expirationDate}
-                      onChange={e => setExpirationDate(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 rounded-lg text-sm transition shadow-sm"
-                  >
-                    Save & Initialize Item
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            {/* Right Column: Inventory List */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200">
-                <h2 className="font-bold text-slate-800">Tenant Inventory & Guard Status</h2>
-                <span className="text-xs text-slate-500">{items.length} Product(s) Registered</span>
-              </div>
-
-              {loading ? (
-                <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400">
-                  Loading inventory...
-                </div>
-              ) : items.length === 0 ? (
-                <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center">
-                  <span className="text-4xl">📦</span>
-                  <h3 className="font-bold text-slate-700 mt-2">No items in your inventory</h3>
-                  <p className="text-xs text-slate-400 mt-1">Use the form on the left to add your first product with batch expiration dates.</p>
-                </div>
-              ) : (
-                items.map(item => {
-                  const activeBatches = (item.batches || []).filter(b => b.quantity > 0);
-                  return (
-                    <div key={item.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs hover:border-slate-300 transition">
-                      {/* Item Header */}
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-100">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-lg font-bold text-slate-900">{item.name}</h3>
-                            <span className="text-sm font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
-                              ${item.price.toFixed(2)}
-                            </span>
-
-                            {/* Lead-Time Guard Indicator */}
-                            {item.isLowStock ? (
-                              <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-0.5 rounded-full font-bold border border-amber-300 flex items-center gap-1">
-                                ⚠️ Low Stock Alert (Min: {item.minThreshold})
-                              </span>
-                            ) : (
-                              <span className="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200 flex items-center gap-1">
-                                ✓ Stock Healthy (Min: {item.minThreshold})
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="text-xs text-slate-500 mt-1">
-                            Total Units Available: <strong className="text-slate-800 text-sm font-bold">{item.totalStock}</strong>
-                          </p>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            onClick={() => { setBatchModalItem(item); }}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs"
-                          >
-                            + Add Batch
-                          </button>
-                          <button
-                            onClick={() => { setDeductModalItem(item); setDeductAudit(null); }}
-                            disabled={item.totalStock <= 0}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs disabled:opacity-40"
-                          >
-                            ⚡ Deduct FIFO
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(item.id, item.name)}
-                            className="text-slate-400 hover:text-rose-600 text-xs p-2 transition"
-                            title="Delete Item"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Batches Container (FIFO Order) */}
-                      <div className="pt-4">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                            🛡️ Perishable FIFO Batches (sorted by expiration date)
-                          </span>
-                          <span className="text-[11px] text-slate-400">{activeBatches.length} active batch(es)</span>
-                        </div>
-
-                        {activeBatches.length === 0 ? (
-                          <div className="bg-slate-50 border border-slate-200 border-dashed rounded-xl p-4 text-center text-xs text-slate-400">
-                            Out of stock. Click "+ Add Batch" to replenish stock with an expiration date.
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                            {activeBatches.map((batch, bIdx) => {
-                              const expiry = new Date(batch.expirationDate);
-                              const isExpired = expiry < new Date();
-                              return (
-                                <div
-                                  key={batch.id}
-                                  className={`p-3 rounded-xl border text-xs relative ${
-                                    bIdx === 0 ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-slate-50/80 border-slate-200'
-                                  }`}
-                                >
-                                  {bIdx === 0 && (
-                                    <span className="absolute -top-2 right-2 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                                      Next for FIFO
-                                    </span>
-                                  )}
-                                  <div className="font-mono font-bold text-slate-800">{batch.batchId}</div>
-                                  <div className={`text-[11px] mt-0.5 font-medium ${isExpired ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>
-                                    Expires: {expiry.toLocaleDateString()} {isExpired ? '(EXPIRED)' : ''}
-                                  </div>
-                                  <div className="mt-2 pt-2 border-t border-slate-200/60 flex justify-between items-baseline">
-                                    <span className="text-slate-400 text-[10px]">Remaining:</span>
-                                    <span className="font-bold text-sm text-slate-900 font-mono">
-                                      {batch.quantity} <span className="text-[10px] text-slate-400 font-normal">/ {batch.initialQuantity}</span>
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* MODAL: ADD BATCH */}
-          {batchModalItem && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
-                <h3 className="text-lg font-bold text-slate-900">Add Stock Batch</h3>
-                <p className="text-xs text-slate-500 mb-4">Adding perishable stock to: <strong className="text-slate-800">{batchModalItem.name}</strong></p>
-
-                <form onSubmit={handleAddBatch} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Batch Code / ID</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. LOT-2026-AUG"
-                      value={newBatchId}
-                      onChange={e => setNewBatchId(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Quantity *</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="e.g. 25"
-                      value={newBatchQty}
-                      onChange={e => setNewBatchQty(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Expiration Date *</label>
-                    <input
-                      type="date"
-                      required
-                      value={newBatchExpiry}
-                      onChange={e => setNewBatchExpiry(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setBatchModalItem(null)}
-                      className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition shadow-xs"
-                    >
-                      Confirm Batch
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* MODAL: FIFO DEDUCT */}
-          {deductModalItem && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <span>⚡</span> First-In, First-Out (FIFO) Deduction
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 mb-3">
-                  Product: <strong className="text-slate-800">{deductModalItem.name}</strong> (Available Stock: <strong className="text-indigo-600">{deductModalItem.totalStock}</strong>)
-                </p>
-
-                <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs p-3 rounded-xl mb-4 leading-relaxed">
-                  🛡️ <strong>Perishable Guard Enforcement:</strong> The backend will automatically deplete stock from the earliest expiring batch before touching newer batches.
-                </div>
-
-                <form onSubmit={handleDeductFIFO} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Units to Deduct *</label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      max={deductModalItem.totalStock}
-                      placeholder={`1 - ${deductModalItem.totalStock}`}
-                      value={deductQty}
-                      onChange={e => setDeductQty(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setDeductModalItem(null)}
-                      className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-xs"
-                    >
-                      Execute FIFO Deduction
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-        </div>
-      );
+    try {
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    } catch (renderError) {
+      console.error('Fatal render error:', renderError);
+      document.getElementById('root').innerHTML = '<div class="p-8 text-rose-600 text-sm">Initialization error: ' + renderError.message + '</div>';
     }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
